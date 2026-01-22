@@ -1,0 +1,111 @@
+"""
+Train models with optional Hopsworks integration
+"""
+import sys
+import argparse
+from pathlib import Path
+import pandas as pd
+from loguru import logger
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.feature_engineering import FeatureEngineer
+from src.model_trainer import ModelTrainer
+from src.feature_store import FeatureStore
+
+
+def main():
+    """Train AQI prediction models"""
+    parser = argparse.ArgumentParser(description='Train AQI prediction models')
+    parser.add_argument(
+        '--input',
+        type=str,
+        default='data/processed/engineered_features.csv',
+        help='Input CSV file with engineered features'
+    )
+    parser.add_argument(
+        '--use-hopsworks',
+        action='store_true',
+        help='Load features from Hopsworks feature store'
+    )
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default='data/models',
+        help='Output directory for trained models'
+    )
+    
+    args = parser.parse_args()
+    
+    logger.info("Starting model training pipeline")
+    
+    # Load data
+    if args.use_hopsworks:
+        logger.info("Loading features from Hopsworks")
+        feature_store = FeatureStore()
+        df = feature_store.load_features()
+        
+        if df.empty:
+            logger.error("No features loaded from Hopsworks")
+            sys.exit(1)
+    else:
+        logger.info(f"Loading features from {args.input}")
+        input_path = Path(args.input)
+        
+        if not input_path.exists():
+            logger.error(f"Input file not found: {input_path}")
+            logger.info("Please run feature pipeline first: python scripts/run_feature_pipeline.py")
+            sys.exit(1)
+        
+        df = pd.read_csv(input_path)
+        df['time'] = pd.to_datetime(df['time'])
+    
+    logger.info(f"Loaded data shape: {df.shape}")
+    
+    # Prepare training data
+    engineer = FeatureEngineer()
+    X, y, feature_names = engineer.prepare_training_data(df, target_col='aqi')
+    
+    if y is None:
+        logger.error("Target column 'aqi' not found in data")
+        sys.exit(1)
+    
+    logger.info(f"Training data: {X.shape}, Target: {y.shape}")
+    logger.info(f"Features: {len(feature_names)}")
+    
+    # Train models
+    trainer = ModelTrainer()
+    results = trainer.train_all_models(X, y)
+    
+    # Display results
+    logger.info("\n=== Model Performance Summary ===")
+    for model_name, metrics in results['metrics'].items():
+        logger.info(f"\n{model_name}:")
+        logger.info(f"  MAE: {metrics['mae']:.2f}")
+        logger.info(f"  RMSE: {metrics['rmse']:.2f}")
+        logger.info(f"  R²: {metrics['r2']:.4f}")
+    
+    # Find best model
+    best_model = min(results['metrics'].items(), key=lambda x: x[1]['mae'])
+    logger.info(f"\nBest Model (by MAE): {best_model[0]}")
+    logger.info(f"  MAE: {best_model[1]['mae']:.2f}")
+    logger.info(f"  R²: {best_model[1]['r2']:.4f}")
+    
+    # Save models
+    output_dir = Path(args.output_dir)
+    trainer.save_models(results, output_dir)
+    
+    logger.info(f"\n=== Training Complete ===")
+    logger.info(f"Models saved to: {output_dir}")
+    
+    # Show feature importance for Random Forest
+    if 'random_forest' in results['models']:
+        logger.info("\n=== Top 10 Feature Importances (Random Forest) ===")
+        importance_df = trainer.get_feature_importance('random_forest')
+        for idx, row in importance_df.head(10).iterrows():
+            logger.info(f"  {row['feature']}: {row['importance']:.4f}")
+
+
+if __name__ == "__main__":
+    main()
