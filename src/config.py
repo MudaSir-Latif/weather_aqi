@@ -71,9 +71,37 @@ class ModelConfig:
     rolling_window_sizes: list = [int(x) for x in os.getenv("ROLLING_WINDOW_SIZES", "3,6,12,24").split(",")]
     
     # Model parameters
-    models_to_train: list = ["ridge", "random_forest", "xgboost"]
+    models_to_train: list = ["ridge", "random_forest", "xgboost", "lstm"]
     test_size: float = 0.2
     random_state: int = 42
+
+    # LSTM parameters
+    lstm_epochs: int = int(os.getenv("LSTM_EPOCHS", 50))
+    lstm_batch_size: int = int(os.getenv("LSTM_BATCH_SIZE", 32))
+    lstm_hidden_size: int = int(os.getenv("LSTM_HIDDEN_SIZE", 64))
+    lstm_lookback: int = int(os.getenv("LSTM_LOOKBACK", 24))
+
+
+class AlertConfig:
+    """Configuration for AQI hazard alerts"""
+
+    # AQI thresholds (US EPA standard)
+    thresholds: dict = {
+        "good": {"min": 0, "max": 50, "level": "info"},
+        "moderate": {"min": 51, "max": 100, "level": "info"},
+        "unhealthy_sensitive": {"min": 101, "max": 150, "level": "warning"},
+        "unhealthy": {"min": 151, "max": 200, "level": "alert"},
+        "very_unhealthy": {"min": 201, "max": 300, "level": "alert"},
+        "hazardous": {"min": 301, "max": 500, "level": "critical"},
+    }
+
+    # Webhook / notification settings (optional)
+    webhook_url: Optional[str] = os.getenv("ALERT_WEBHOOK_URL")
+    alert_email: Optional[str] = os.getenv("ALERT_EMAIL")
+    alert_log_path: Path = Path("logs/aqi_alerts.json")
+
+    # Cooldown: minimum seconds between repeated alerts of the same level
+    cooldown_seconds: int = int(os.getenv("ALERT_COOLDOWN", 3600))
 
 
 class AppConfig:
