@@ -1,5 +1,6 @@
 """
 Model training for AQI prediction
+Supports Ridge, Random Forest, XGBoost, and LSTM models.
 """
 import pandas as pd
 import numpy as np
@@ -14,6 +15,74 @@ import xgboost as xgb
 from loguru import logger
 
 from src.config import ModelConfig
+
+# Optional deep-learning imports
+try:
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    logger.info("PyTorch not installed — LSTM model will be unavailable.")
+
+
+# ---------------------------------------------------------------------------
+# LSTM helpers (defined at module level so they are pickle-friendly)
+# ---------------------------------------------------------------------------
+
+if TORCH_AVAILABLE:
+    class _LSTMNet(nn.Module):
+        """Simple LSTM regressor."""
+
+        def __init__(self, input_size: int, hidden_size: int = 64, num_layers: int = 2):
+            super().__init__()
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2)
+            self.fc = nn.Linear(hidden_size, 1)
+
+        def forward(self, x):
+            # x: (batch, seq_len, features)
+            out, _ = self.lstm(x)
+            out = self.fc(out[:, -1, :])  # last timestep
+            return out
+
+
+class LSTMWrapper:
+    """Sklearn-compatible wrapper around a PyTorch LSTM model."""
+
+    def __init__(self, net, input_size: int):
+        self.net = net
+        self.input_size = input_size
+
+    def predict(self, X) -> np.ndarray:
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch not available.")
+        self.net.eval()
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        X_t = torch.tensor(X, dtype=torch.float32).unsqueeze(1)
+        with torch.no_grad():
+            preds = self.net(X_t).squeeze(-1).numpy()
+        return preds
+
+    # Needed so joblib can serialize the wrapper
+    def __getstate__(self):
+        import io
+        buf = io.BytesIO()
+        torch.save(self.net.state_dict(), buf)
+        return {"state_dict": buf.getvalue(), "input_size": self.input_size,
+                "hidden_size": self.net.lstm.hidden_size, "num_layers": self.net.lstm.num_layers}
+
+    def __setstate__(self, state):
+        if not TORCH_AVAILABLE:
+            raise RuntimeError("PyTorch required to load LSTM model.")
+        net = _LSTMNet(state["input_size"], state["hidden_size"], state["num_layers"])
+        import io
+        buf = io.BytesIO(state["state_dict"])
+        net.load_state_dict(torch.load(buf, weights_only=True))
+        net.eval()
+        self.net = net
+        self.input_size = state["input_size"]
 
 
 class ModelTrainer:
@@ -118,6 +187,72 @@ class ModelTrainer:
         logger.info("XGBoost training complete")
         return model
     
+    # ------------------------------------------------------------------
+    # LSTM Deep Learning model
+    # ------------------------------------------------------------------
+
+    def train_lstm(
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        epochs: int = None,
+        batch_size: int = None,
+        hidden_size: int = None,
+    ) -> Any:
+        """
+        Train an LSTM model for AQI prediction.
+
+        The tabular features are reshaped into a single-timestep sequence
+        so the LSTM learns a non-linear mapping.  For production you would
+        feed rolling windows; this keeps the API identical to the other
+        trainers so it plugs into the existing pipeline.
+
+        Returns:
+            LSTMWrapper that exposes a sklearn-compatible .predict() method.
+        """
+        if not TORCH_AVAILABLE:
+            logger.warning("PyTorch not installed — skipping LSTM training.")
+            return None
+
+        epochs = epochs or self.config.lstm_epochs
+        batch_size = batch_size or self.config.lstm_batch_size
+        hidden_size = hidden_size or self.config.lstm_hidden_size
+
+        logger.info(
+            f"Training LSTM (epochs={epochs}, batch={batch_size}, hidden={hidden_size})"
+        )
+
+        input_size = X_train.shape[1]
+
+        # Convert to tensors
+        X_t = torch.tensor(X_train.values, dtype=torch.float32).unsqueeze(1)  # (N,1,F)
+        y_t = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1)  # (N,1)
+
+        dataset = TensorDataset(X_t, y_t)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+        # Build model
+        net = _LSTMNet(input_size, hidden_size)
+        optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
+        criterion = nn.MSELoss()
+
+        net.train()
+        for epoch in range(1, epochs + 1):
+            epoch_loss = 0.0
+            for xb, yb in loader:
+                optimizer.zero_grad()
+                pred = net(xb)
+                loss = criterion(pred, yb)
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item() * xb.size(0)
+            if epoch % max(1, epochs // 5) == 0 or epoch == epochs:
+                logger.info(f"  LSTM epoch {epoch}/{epochs}  loss={epoch_loss / len(dataset):.4f}")
+
+        wrapper = LSTMWrapper(net, input_size)
+        logger.info("LSTM training complete")
+        return wrapper
+    
     def evaluate_model(
         self, 
         model: Any, 
@@ -214,6 +349,17 @@ class ModelTrainer:
             xgb_metrics = self.evaluate_model(xgb_model, X_test, y_test, 'XGBoost')
             results['models']['xgboost'] = xgb_model
             results['metrics']['xgboost'] = xgb_metrics
+        
+        # Train LSTM (deep learning)
+        if 'lstm' in self.config.models_to_train:
+            if TORCH_AVAILABLE:
+                lstm_model = self.train_lstm(X_train, y_train)
+                if lstm_model is not None:
+                    lstm_metrics = self.evaluate_model(lstm_model, X_test, y_test, 'LSTM')
+                    results['models']['lstm'] = lstm_model
+                    results['metrics']['lstm'] = lstm_metrics
+            else:
+                logger.warning("Skipping LSTM — PyTorch not installed.")
         
         # Store in instance
         self.models = results['models']

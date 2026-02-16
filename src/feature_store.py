@@ -106,26 +106,23 @@ class FeatureStore:
         for col in df.columns:
             if col == 'time':
                 continue
-            # Only process columns that contain any strings
-            if df[col].dtype == object:
-                def _parse_value(v):
-                    if isinstance(v, str):
-                        m = bracket_pattern.match(v.strip())
-                        if m:
-                            try:
-                                return float(m.group(1))
-                            except ValueError:
-                                return np.nan
+            # Always sanitize bracket-wrapped scientific notation and numeric strings
+            def _parse_value(v):
+                if isinstance(v, str):
+                    m = bracket_pattern.match(v.strip())
+                    if m:
                         try:
-                            return float(v)
+                            return float(m.group(1))
                         except ValueError:
                             return np.nan
-                    return v
-
-                df[col] = df[col].apply(_parse_value)
-            # Coerce to numeric (handles any remaining edge cases)
-            if col != 'time':
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                    try:
+                        return float(v)
+                    except ValueError:
+                        return np.nan
+                return v
+            df[col] = df[col].apply(_parse_value)
+            # Force column to numeric (except 'time')
+            df[col] = pd.to_numeric(df[col], errors='coerce')
 
         logger.info(f"Sanitized Hopsworks output: {df.shape}")
         return df
@@ -211,7 +208,6 @@ class FeatureStore:
                             logger.info(f"Waiting {wait}s before retry...")
                             time.sleep(wait)
                         else:
-                            # After all retries, treat as success since upload reached 100%
                             logger.warning(
                                 "All insert retries exhausted due to connection drops. "
                                 "Data was likely uploaded successfully."
