@@ -1,0 +1,31 @@
+sample,feature_rule,weight
+median_aqi,34.80 < pm2_5 <= 44.60,9.400764640912769
+median_aqi,no2 <= 11.38,-7.800865158863046
+median_aqi,17.00 < no2_rolling_max_3 <= 33.20,6.224288448938669
+median_aqi,32.50 < pm10 <= 43.25,-5.86540480020841
+median_aqi,41.85 < pm2_5_rolling_max_6 <= 54.73,-4.889450552551025
+median_aqi,so2_lag_1 <= 14.40,-4.223195686328283
+median_aqi,25.75 < no2_lag_24 <= 46.30,-4.043953609778726
+median_aqi,co_rolling_max_3 <= 649.75,3.7737568941065023
+median_aqi,pm2_5_lag_12 <= 26.30,3.486458836111751
+median_aqi,pm2_5_rolling_mean_12 > 44.26,3.4270943218075884
+high_aqi,pm2_5 > 44.60,36.80488707825052
+high_aqi,no2 > 44.92,29.332612803962206
+high_aqi,no2_rolling_max_3 > 52.12,-6.254115956377617
+high_aqi,o3_lag_1 <= 35.00,5.002863047595767
+high_aqi,co_lag_3 <= 511.00,4.9010962543449
+high_aqi,o3_lag_24 <= 33.00,4.785270752499107
+high_aqi,no2_rolling_std_12 <= 10.75,4.280982779117303
+high_aqi,pm10_rolling_std_24 <= 7.47,4.262989868296466
+high_aqi,pm10_rolling_mean_12 > 56.80,4.24341533836511
+high_aqi,co > 1149.25,-4.038262482423768
+low_aqi,pm2_5 <= 26.30,-32.918270430851834
+low_aqi,11.38 < no2 <= 25.20,-11.64686707897223
+low_aqi,pm2_5_rolling_max_6 <= 32.50,11.315592666988284
+low_aqi,pm10_lag_1 <= 32.50,8.059353466033986
+low_aqi,o3_rolling_mean_3 > 112.67,6.5947667198072715
+low_aqi,11.60 < no2_lag_24 <= 25.75,6.5085867726935165
+low_aqi,0.72 < pm2_5_pm10_ratio <= 0.88,-5.0892665452819
+low_aqi,pm10_rolling_max_6 <= 40.50,4.168458854999052
+low_aqi,so2_rolling_min_3 > 23.50,-4.013450000705609
+low_aqi,co_lag_3 <= 511.00,3.6894933891353134

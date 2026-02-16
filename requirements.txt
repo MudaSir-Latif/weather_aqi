@@ -33,6 +33,10 @@ seaborn>=0.12.0
 
 # Explainability
 shap>=0.42.0
+lime>=0.2.0
+
+# Deep Learning (optional — LSTM model)
+torch>=2.0.0
 
 # Utilities
 pytz>=2023.3
