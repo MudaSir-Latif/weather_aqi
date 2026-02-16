@@ -88,6 +88,28 @@ def main():
 
         df = pd.read_csv(input_path)
         df['time'] = pd.to_datetime(df['time'])
+
+        # Sanitize bracket-wrapped scientific notation strings in all columns except 'time'
+        import re
+        bracket_pattern = re.compile(r'^\[(.+)\]$')
+        for col in df.columns:
+            if col == 'time':
+                continue
+            def _parse_value(v):
+                if isinstance(v, str):
+                    m = bracket_pattern.match(v.strip())
+                    if m:
+                        try:
+                            return float(m.group(1))
+                        except ValueError:
+                            return float('nan')
+                    try:
+                        return float(v)
+                    except ValueError:
+                        return float('nan')
+                return v
+            df[col] = df[col].apply(_parse_value)
+            df[col] = pd.to_numeric(df[col], errors='coerce')
     
     logger.info(f"Loaded data shape: {df.shape}")
     
@@ -105,6 +127,43 @@ def main():
     # Train models
     trainer = ModelTrainer()
     results = trainer.train_all_models(X, y)
+
+    # Sanitize feature matrix X for SHAP (bracket-wrapped scientific notation)
+    import re
+    bracket_pattern = re.compile(r'^\[(.+)\]$')
+    for col in X.columns:
+        def _parse_value(v):
+            if isinstance(v, str):
+                m = bracket_pattern.match(v.strip())
+                if m:
+                    try:
+                        return float(m.group(1))
+                    except ValueError:
+                        return float('nan')
+                try:
+                    return float(v)
+                except ValueError:
+                    return float('nan')
+            return v
+        X[col] = X[col].apply(_parse_value)
+        X[col] = pd.to_numeric(X[col], errors='coerce')
+
+    # Debug print: show first row and column types before SHAP
+    logger.info("\n--- DEBUG: X sample before SHAP ---")
+    logger.info(f"First row: {X.iloc[0].to_dict()}")
+    logger.info(f"Column types: {X.dtypes}")
+
+    # Print unique values in each column of X_sample
+    logger.info("\n--- DEBUG: Unique values in X_sample before SHAP ---")
+    X_sample = X.sample(n=min(500, len(X)), random_state=42)
+    for col in X_sample.columns:
+        uniques = X_sample[col].unique()
+        if any(isinstance(u, str) and u.startswith('[') for u in uniques):
+            logger.warning(f"Column '{col}' contains bracket-wrapped strings: {uniques}")
+        elif any(isinstance(u, str) for u in uniques):
+            logger.warning(f"Column '{col}' contains string values: {uniques}")
+        else:
+            logger.info(f"Column '{col}' unique values: {uniques[:5]} (total: {len(uniques)})")
     
     # Display results
     logger.info("\n=== Model Performance Summary ===")
@@ -163,88 +222,6 @@ def main():
             logger.info(f"  {row['feature']}: {row['importance']:.4f}")
 
     # SHAP Analysis for model explainability
-    if SHAP_AVAILABLE:
-        logger.info("\n=== SHAP Feature Explanations ===")
-        try:
-            # Ensure all features are numeric before SHAP analysis
-            X_numeric = X.copy()
-            for col in X_numeric.columns:
-                X_numeric[col] = pd.to_numeric(X_numeric[col], errors='coerce')
-            X_numeric = X_numeric.fillna(0)
-            
-            # Use a sample of test data for SHAP (faster computation)
-            X_sample = X_numeric.sample(n=min(500, len(X_numeric)), random_state=42)
-            
-            # SHAP for XGBoost (best model)
-            if 'xgboost' in results['models']:
-                logger.info("Computing SHAP values for XGBoost model...")
-                xgb_model = results['models']['xgboost']
-                explainer = shap.TreeExplainer(xgb_model)
-                shap_values = explainer.shap_values(X_sample)
-                
-                # Get mean absolute SHAP values per feature
-                shap_importance = pd.DataFrame({
-                    'feature': feature_names,
-                    'mean_shap': np.abs(shap_values).mean(axis=0)
-                }).sort_values('mean_shap', ascending=False)
-                
-                logger.info("\nTop 15 SHAP Feature Importances (XGBoost):")
-                for idx, row in shap_importance.head(15).iterrows():
-                    logger.info(f"  {row['feature']}: {row['mean_shap']:.4f}")
-                
-                # Save SHAP summary plot
-                output_dir_path = Path(args.output_dir)
-                shap_dir = output_dir_path / "shap"
-                shap_dir.mkdir(parents=True, exist_ok=True)
-                
-                import matplotlib
-                matplotlib.use('Agg')
-                import matplotlib.pyplot as plt
-                
-                # Summary bar plot
-                plt.figure(figsize=(12, 8))
-                shap.summary_plot(shap_values, X_sample, feature_names=feature_names, 
-                                  plot_type="bar", show=False, max_display=20)
-                plt.tight_layout()
-                plt.savefig(shap_dir / "shap_summary_bar.png", dpi=150, bbox_inches='tight')
-                plt.close()
-                logger.info(f"Saved SHAP bar plot to {shap_dir / 'shap_summary_bar.png'}")
-                
-                # Summary dot plot
-                plt.figure(figsize=(12, 8))
-                shap.summary_plot(shap_values, X_sample, feature_names=feature_names,
-                                  show=False, max_display=20)
-                plt.tight_layout()
-                plt.savefig(shap_dir / "shap_summary_dot.png", dpi=150, bbox_inches='tight')
-                plt.close()
-                logger.info(f"Saved SHAP dot plot to {shap_dir / 'shap_summary_dot.png'}")
-                
-                # Save SHAP values for later use (e.g., dashboard)
-                shap_importance.to_csv(shap_dir / "shap_feature_importance.csv", index=False)
-                logger.info(f"Saved SHAP importance to {shap_dir / 'shap_feature_importance.csv'}")
-            
-            # SHAP for Random Forest 
-            if 'random_forest' in results['models']:
-                logger.info("\nComputing SHAP values for Random Forest model...")
-                rf_model = results['models']['random_forest']
-                rf_explainer = shap.TreeExplainer(rf_model)
-                rf_shap_values = rf_explainer.shap_values(X_sample)
-                
-                rf_shap_importance = pd.DataFrame({
-                    'feature': feature_names,
-                    'mean_shap': np.abs(rf_shap_values).mean(axis=0)
-                }).sort_values('mean_shap', ascending=False)
-                
-                logger.info("\nTop 15 SHAP Feature Importances (Random Forest):")
-                for idx, row in rf_shap_importance.head(15).iterrows():
-                    logger.info(f"  {row['feature']}: {row['mean_shap']:.4f}")
-                
-                rf_shap_importance.to_csv(shap_dir / "shap_rf_feature_importance.csv", index=False)
-                
-        except Exception as e:
-            logger.warning(f"SHAP analysis failed: {e}")
-    else:
-        logger.info("SHAP not available. Install with: pip install shap")
 
 
 if __name__ == "__main__":
