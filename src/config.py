@@ -14,7 +14,7 @@ load_dotenv()
 class OpenMeteoConfig:
     """Configuration for Open-Meteo API"""
     
-    air_quality_url: str = "https://air-quality.open-meteo.com/v1/air-quality"
+    air_quality_url: str = "https://air-quality-api.open-meteo.com/v1/air-quality"
     weather_url: str = "https://api.open-meteo.com/v1/forecast"
     timeout: int = int(os.getenv("OPENMETEO_TIMEOUT", 60))
     
