@@ -42,18 +42,7 @@ ENV/
 .ipynb_checkpoints
 *.ipynb
 
-# Data
-data/raw/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
 
-# Models
-data/models/*
-!data/models/.gitkeep
-*.pkl
-*.joblib
-*.h5
-*.pth
 
 # Logs
 logs/
@@ -78,3 +67,15 @@ test_*.py
 
 # OS
 Thumbs.db
+
+# Data outputs and generated artifacts
+data/processed/
+data/analysis/
+
+# SHAP/LIME outputs
+data/processed/shap_*
+data/processed/lime_*
+
+# Notebook outputs
+*.png
+*.svg
