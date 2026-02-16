@@ -19,6 +19,7 @@ from src.data_fetcher import OpenMeteoFetcher, AQICalculator
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.config import LocationConfig, ModelConfig
+from src.alerts import AlertManager
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -42,6 +43,7 @@ engineer = FeatureEngineer()
 trainer = ModelTrainer()
 location = LocationConfig()
 config = ModelConfig()
+alert_manager = AlertManager()
 
 # Load models on startup
 @app.on_event("startup")
@@ -297,6 +299,72 @@ async def get_model_info():
     except Exception as e:
         logger.error(f"Error in get_model_info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Alert endpoints
+# ---------------------------------------------------------------------------
+
+class AlertStatusResponse(BaseModel):
+    """Current AQI alert status"""
+    aqi: float
+    category: str
+    level: str
+    message: str
+    recommendations: List[str]
+
+
+class AlertHistoryItem(BaseModel):
+    """Single alert history entry"""
+    aqi: float
+    category: str
+    level: str
+    message: str
+    location: str
+    timestamp: str
+
+
+@app.get("/api/alerts/status", response_model=AlertStatusResponse)
+async def get_alert_status():
+    """Get current AQI alert status with recommendations"""
+    try:
+        current_data = fetcher.fetch_current_air_quality()
+        if not current_data:
+            raise HTTPException(status_code=503, detail="Failed to fetch current AQI")
+
+        aqi = current_data["aqi"]
+        # Evaluate (may trigger a persistent alert)
+        alert_manager.evaluate(aqi, location=location.city_name)
+        # Always return status
+        status = alert_manager.get_current_status(aqi)
+        return AlertStatusResponse(**status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_alert_status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/alerts/history", response_model=List[AlertHistoryItem])
+async def get_alert_history(
+    limit: int = Query(default=50, ge=1, le=500, description="Max alerts to return")
+):
+    """Get alert history (newest first)"""
+    try:
+        history = alert_manager.get_history(limit)
+        return [AlertHistoryItem(**h) for h in history]
+    except Exception as e:
+        logger.error(f"Error in get_alert_history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/alerts/evaluate")
+async def evaluate_aqi(
+    aqi: float = Query(..., description="AQI value to evaluate")
+):
+    """Manually evaluate an AQI value and return alert info"""
+    status = alert_manager.get_current_status(aqi)
+    return status
 
 
 @app.get("/")

@@ -16,6 +16,7 @@ from src.data_fetcher import OpenMeteoFetcher, AQICalculator
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.config import LocationConfig, ModelConfig
+from src.alerts import AlertManager
 
 # Page configuration
 st.set_page_config(
@@ -237,7 +238,7 @@ def main():
         st.rerun()
     
     # Main content
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Current Status", "📈 Historical Data", "🔮 Predictions", "ℹ️ Model Info"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Current Status", "📈 Historical Data", "🔮 Predictions", "⚠️ Alerts", "ℹ️ Model Info"])
     
     # Tab 1: Current Status
     with tab1:
@@ -394,8 +395,53 @@ def main():
         except Exception as e:
             st.error(f"Error: {str(e)}")
     
-    # Tab 4: Model Info
+    # Tab 4: Alerts
     with tab4:
+        st.header("⚠️ AQI Hazard Alerts")
+
+        alert_mgr = AlertManager()
+
+        try:
+            current_data = fetch_current_aqi()
+            if current_data:
+                aqi_val = current_data["aqi"]
+
+                # Evaluate & possibly trigger alert
+                alert_mgr.evaluate(aqi_val, location=location.city_name)
+                status = alert_mgr.get_current_status(aqi_val)
+
+                # Status banner
+                level = status["level"]
+                color_map = {"info": "green", "warning": "orange", "alert": "red", "critical": "darkred"}
+                banner_color = color_map.get(level, "gray")
+                st.markdown(
+                    f'<div style="padding:16px;border-radius:8px;background:{banner_color};color:white;'
+                    f'font-size:18px;margin-bottom:16px;">'
+                    f'<b>{status["category"]}</b> — AQI {aqi_val} — {status["message"]}</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # Recommendations
+                st.subheader("Health Recommendations")
+                for rec in status["recommendations"]:
+                    st.markdown(f"- {rec}")
+            else:
+                st.warning("Could not fetch current AQI for alert evaluation.")
+        except Exception as e:
+            st.error(f"Error evaluating alerts: {e}")
+
+        # Alert history
+        st.subheader("Alert History")
+        history = alert_mgr.get_history(limit=30)
+        if history:
+            hist_df = pd.DataFrame(history)
+            hist_df = hist_df[["timestamp", "aqi", "category", "level", "message"]]
+            st.dataframe(hist_df, use_container_width=True)
+        else:
+            st.info("No alerts recorded yet.")
+
+    # Tab 5: Model Info
+    with tab5:
         st.header("Model Performance Metrics")
         
         if trainer.metrics:
