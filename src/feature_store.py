@@ -120,13 +120,19 @@ class FeatureStore:
             logger.info(f"DataFrame shape for Hopsworks: {df.shape}")
             
             # Get or create feature group
+            feature_group = None
             try:
                 feature_group = self.fs.get_feature_group(
                     name=self.config.feature_group_name,
                     version=self.config.feature_group_version
                 )
-                logger.info("Feature group exists, will update")
             except Exception:
+                pass
+
+            if feature_group is not None:
+                logger.info("Feature group exists, will update")
+            else:
+                logger.info("Feature group does not exist, creating new one")
                 feature_group = self.fs.create_feature_group(
                     name=self.config.feature_group_name,
                     version=self.config.feature_group_version,
