@@ -234,7 +234,7 @@ def main():
     # Refresh button
     if st.sidebar.button("🔄 Refresh Data"):
         st.cache_data.clear()
-        st.experimental_rerun()
+        st.rerun()
     
     # Main content
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Current Status", "📈 Historical Data", "🔮 Predictions", "ℹ️ Model Info"])
@@ -252,7 +252,7 @@ def main():
                 with col1:
                     # AQI Gauge
                     fig_gauge = plot_aqi_gauge(current_data['aqi'])
-                    st.plotly_chart(fig_gauge, use_container_width=True)
+                    st.plotly_chart(fig_gauge, width='stretch')
                 
                 with col2:
                     st.metric("AQI Value", current_data['aqi'])
@@ -299,7 +299,7 @@ def main():
             if not df.empty:
                 # AQI Trend
                 fig_trend = plot_historical_trend(df)
-                st.plotly_chart(fig_trend, use_container_width=True)
+                st.plotly_chart(fig_trend, width='stretch')
                 
                 # Statistics
                 col1, col2, col3, col4 = st.columns(4)
@@ -322,12 +322,12 @@ def main():
                         names=category_counts.index,
                         title="Distribution of AQI Categories"
                     )
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    st.plotly_chart(fig_pie, width='stretch')
                 
                 # Pollutant trends
                 st.subheader("Pollutant Trends")
                 fig_pollutants = plot_pollutants(df)
-                st.plotly_chart(fig_pollutants, use_container_width=True)
+                st.plotly_chart(fig_pollutants, width='stretch')
                 
             else:
                 st.warning("No historical data available")
@@ -374,7 +374,7 @@ def main():
                         
                         # Plot predictions
                         fig_pred = plot_predictions(predictions_df)
-                        st.plotly_chart(fig_pred, use_container_width=True)
+                        st.plotly_chart(fig_pred, width='stretch')
                         
                         # Display predictions table
                         st.subheader("Detailed Forecast")
@@ -410,7 +410,7 @@ def main():
                 for metrics in trainer.metrics.values()
             ])
             
-            st.dataframe(metrics_df, use_container_width=True)
+            st.dataframe(metrics_df, width='stretch')
             
             # Success criteria
             st.subheader("Success Criteria")
@@ -433,7 +433,7 @@ def main():
                         orientation='h',
                         title="Top 15 Features"
                     )
-                    st.plotly_chart(fig_importance, use_container_width=True)
+                    st.plotly_chart(fig_importance, width='stretch')
         else:
             st.warning("No model metrics available. Please train models first.")
         
