@@ -1,0 +1,10 @@
+{
+  "run_id": "run_2026-01-20_04",
+  "workflow": "train_model.yml",
+  "status": "completed",
+  "conclusion": "success",
+  "started_at": "2026-01-20T01:10:00Z",
+  "completed_at": "2026-01-20T01:33:20Z",
+  "duration_seconds": 1400,
+  "note": "Synthetic in-repo artifact — not a real Actions run log"
+}

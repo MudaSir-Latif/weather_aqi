@@ -1,0 +1,10 @@
+{
+  "run_id": "run_2026-02-09_09",
+  "workflow": "feature_pipeline.yml",
+  "status": "completed",
+  "conclusion": "success",
+  "started_at": "2026-02-09T06:10:00Z",
+  "completed_at": "2026-02-09T06:26:15Z",
+  "duration_seconds": 976,
+  "note": "Synthetic in-repo artifact — not a real Actions run log"
+}
