@@ -4,6 +4,7 @@ on:
   schedule:
     # Run every hour to fetch latest air quality data
     - cron: '0 * * * *'
+    # Note: hourly schedule enforced (minute 0 of each hour)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:

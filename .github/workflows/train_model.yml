@@ -4,6 +4,7 @@ on:
   schedule:
     # Run daily at 2 AM UTC (after feature pipeline has accumulated data)
     - cron: '0 2 * * *'
+    # Note: daily schedule (2:00 UTC) — runs every day
   workflow_dispatch:
     inputs:
       backfill_days:
