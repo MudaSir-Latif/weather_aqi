@@ -36,7 +36,7 @@ jobs:
       
       - name: Backfill historical data
         run: |
-          python scripts/backfill_data.py --days 365
+          python scripts/backfill_data.py --days 730
       
       - name: Run feature pipeline
         run: |
