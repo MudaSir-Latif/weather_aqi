@@ -3,7 +3,7 @@ name: Train Models
 on:
   schedule:
     # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -33,22 +33,23 @@ jobs:
           echo "CITY_NAME=${{ secrets.CITY_NAME || 'Karachi' }}" >> .env
           echo "HOPSWORKS_API_KEY=${{ secrets.HOPSWORKS_API_KEY }}" >> .env
           echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'aqi_prediction' }}" >> .env
+          echo "OPENMETEO_TIMEOUT=120" >> .env
       
       - name: Backfill historical data
         run: |
           python scripts/backfill_data.py --days 730
       
-      - name: Run feature pipeline
+      - name: Run feature pipeline (local + Hopsworks)
         run: |
-          python scripts/run_feature_pipeline.py --input data/raw/historical_data.csv
+          python scripts/run_feature_pipeline.py --input data/raw/historical_data.csv --use-hopsworks
       
-      - name: Train models
+      - name: Train models (Hopsworks with local fallback)
         run: |
-          python scripts/run_training_with_hopsworks.py
+          python scripts/run_training_with_hopsworks.py --use-hopsworks
       
       - name: Validate models
         run: |
-          python scripts/validate_models.py --days 7
+          python scripts/validate_models.py --days 7 --input data/processed/engineered_features.csv
       
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4

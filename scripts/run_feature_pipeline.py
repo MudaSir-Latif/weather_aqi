@@ -77,27 +77,22 @@ def main():
     logger.info(f"Engineered features shape: {df_engineered.shape}")
     logger.info(f"Number of features: {len(df_engineered.columns)}")
     
-    # Save to Hopsworks if requested; otherwise save locally
+    # Always save local CSV (needed for validation & as fallback)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_engineered.to_csv(output_path, index=False)
+    logger.info(f"Saved engineered features locally to {output_path}")
+
+    # Additionally push to Hopsworks feature store if requested
     if args.use_hopsworks:
-        logger.info("Saving features to Hopsworks (skipping local CSV)")
+        logger.info("Pushing features to Hopsworks feature store")
         feature_store = FeatureStore()
         success = feature_store.save_features(df_engineered)
 
         if success:
             logger.info("Features saved to Hopsworks successfully")
         else:
-            logger.warning("Failed to save features to Hopsworks")
-            # Fallback: write local CSV so pipeline output is available
-            output_path = Path(args.output)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            df_engineered.to_csv(output_path, index=False)
-            logger.info(f"Saved engineered features to {output_path} (fallback)")
-    else:
-        # Save to local file
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df_engineered.to_csv(output_path, index=False)
-        logger.info(f"Saved engineered features to {output_path}")
+            logger.warning("Failed to save features to Hopsworks (local CSV still available)")
     
     logger.info("=== Feature Engineering Pipeline Complete ===")
 

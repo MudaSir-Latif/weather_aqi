@@ -16,7 +16,7 @@ class OpenMeteoConfig:
     
     air_quality_url: str = "https://air-quality-api.open-meteo.com/v1/air-quality"
     weather_url: str = "https://api.open-meteo.com/v1/forecast"
-    timeout: int = int(os.getenv("OPENMETEO_TIMEOUT", 60))
+    timeout: int = int(os.getenv("OPENMETEO_TIMEOUT", 120))
     
     # Air quality parameters to fetch
     air_quality_params: list = [
@@ -52,7 +52,7 @@ class LocationConfig:
 
 
 class HopsworksConfig:
-    """Configuration for Hopsworks Feature Store (Optional)"""
+    """Configuration for Hopsworks Feature Store"""
     
     api_key: Optional[str] = os.getenv("HOPSWORKS_API_KEY")
     project_name: str = os.getenv("HOPSWORKS_PROJECT_NAME", "aqi_prediction")

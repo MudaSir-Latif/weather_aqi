@@ -1,5 +1,4 @@
-"""
-Train models with optional Hopsworks integration
+"""Train models with Hopsworks feature store integration
 """
 import sys
 import argparse
@@ -41,23 +40,35 @@ def main():
     logger.info("Starting model training pipeline")
     
     # Load data
+    df = pd.DataFrame()
+
     if args.use_hopsworks:
-        logger.info("Loading features from Hopsworks")
-        feature_store = FeatureStore()
-        df = feature_store.load_features()
-        
-        if df.empty:
-            logger.error("No features loaded from Hopsworks")
-            sys.exit(1)
-    else:
-        logger.info(f"Loading features from {args.input}")
+        logger.info("Loading features from Hopsworks feature store")
+        try:
+            feature_store = FeatureStore()
+            df = feature_store.load_features()
+            if not df.empty:
+                logger.info(f"Loaded {len(df)} records from Hopsworks")
+                if 'time' in df.columns:
+                    df['time'] = pd.to_datetime(df['time'])
+            else:
+                logger.warning("Hopsworks returned empty DataFrame")
+        except Exception as e:
+            logger.warning(f"Failed to load from Hopsworks: {e}")
+
+    # Fall back to local CSV if Hopsworks data is empty or not requested
+    if df.empty:
         input_path = Path(args.input)
-        
+        if args.use_hopsworks:
+            logger.info(f"Falling back to local CSV: {input_path}")
+        else:
+            logger.info(f"Loading features from {input_path}")
+
         if not input_path.exists():
             logger.error(f"Input file not found: {input_path}")
             logger.info("Please run feature pipeline first: python scripts/run_feature_pipeline.py")
             sys.exit(1)
-        
+
         df = pd.read_csv(input_path)
         df['time'] = pd.to_datetime(df['time'])
     

@@ -71,7 +71,7 @@ LATITUDE=24.8607
 LONGITUDE=67.0011
 CITY_NAME=Karachi
 
-# Optional: Hopsworks Feature Store
+# Hopsworks Feature Store
 HOPSWORKS_API_KEY=your_key_here
 HOPSWORKS_PROJECT_NAME=aqi_prediction
 ```
@@ -360,7 +360,7 @@ LOOKBACK_HOURS=24              # Hours of lag features
 ROLLING_WINDOW_SIZES=3,6,12,24 # Rolling window sizes
 ```
 
-### Hopsworks Feature Store (Optional)
+### Hopsworks Feature Store
 ```env
 HOPSWORKS_API_KEY=your_api_key
 HOPSWORKS_PROJECT_NAME=aqi_prediction

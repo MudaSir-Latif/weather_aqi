@@ -240,12 +240,28 @@ class OpenMeteoFetcher:
             }
             
             logger.info(f"Fetching air quality history from {start_date} to {end_date}")
-            response = requests.get(
-                self.config.air_quality_url,
-                params=params,
-                timeout=self.config.timeout
-            )
-            response.raise_for_status()
+            
+            # Retry logic for resilience against transient network issues
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    response = requests.get(
+                        self.config.air_quality_url,
+                        params=params,
+                        timeout=self.config.timeout
+                    )
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.Timeout:
+                    logger.warning(f"Timeout on attempt {attempt}/{max_retries}")
+                    if attempt == max_retries:
+                        raise
+                    time.sleep(5 * attempt)
+                except requests.exceptions.ConnectionError:
+                    logger.warning(f"Connection error on attempt {attempt}/{max_retries}")
+                    if attempt == max_retries:
+                        raise
+                    time.sleep(5 * attempt)
             
             data = response.json()
             

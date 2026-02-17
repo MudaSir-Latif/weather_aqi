@@ -43,7 +43,7 @@ This implementation delivers a complete **Air Quality Index (AQI) Prediction Sys
 - ✅ **data_fetcher.py**: Open-Meteo API integration with AQI calculation
 - ✅ **feature_engineering.py**: 153 engineered features (temporal, lag, rolling, interactions)
 - ✅ **model_trainer.py**: Ridge, Random Forest, XGBoost models
-- ✅ **feature_store.py**: Optional Hopsworks integration
+- ✅ **feature_store.py**: Hopsworks feature store integration
 
 ### 2. REST API Backend (`api/`)
 - ✅ **main.py**: FastAPI application with 5 endpoints
@@ -170,7 +170,7 @@ This implementation delivers a complete **Air Quality Index (AQI) Prediction Sys
 - **HTTP Client**: requests
 - **Logging**: loguru
 - **Visualization**: plotly, matplotlib, seaborn
-- **Feature Store** (optional): Hopsworks
+- **Feature Store**: Hopsworks
 - **CI/CD**: GitHub Actions
 
 ---

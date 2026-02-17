@@ -240,7 +240,7 @@ class FeatureEngineer:
         df = self.create_weather_interactions(df)
         
         # 7. Fill missing values
-        df = df.fillna(method='ffill').fillna(method='bfill').fillna(0)
+        df = df.ffill().bfill().fillna(0)
         
         logger.info(f"Feature engineering complete. Shape: {df.shape}")
         logger.info(f"Features: {df.columns.tolist()}")

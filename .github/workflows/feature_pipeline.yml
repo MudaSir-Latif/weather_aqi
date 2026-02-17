@@ -3,7 +3,7 @@ name: Feature Pipeline
 on:
   schedule:
     # Run hourly at minute 0 UTC
-    - cron: '0 * * * *'
+    - cron: '*/1 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -34,10 +34,9 @@ jobs:
           echo "HOPSWORKS_API_KEY=${{ secrets.HOPSWORKS_API_KEY }}" >> .env
           echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'aqi_prediction' }}" >> .env
       
-      - name: Run feature pipeline
+      - name: Run feature pipeline (local + Hopsworks)
         run: |
           python scripts/run_feature_pipeline.py --days 30 --use-hopsworks
-        continue-on-error: true
       
       - name: Upload feature data
         uses: actions/upload-artifact@v4

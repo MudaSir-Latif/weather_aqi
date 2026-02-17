@@ -17,6 +17,54 @@ from src.data_fetcher import OpenMeteoFetcher
 from datetime import datetime, timedelta
 
 
+def load_validation_data(days: int, local_file: str = None) -> pd.DataFrame:
+    """
+    Load validation data from local CSV first, then fall back to API.
+
+    Args:
+        days: Number of recent days to use for validation.
+        local_file: Path to local CSV (e.g. engineered features or raw data).
+
+    Returns:
+        DataFrame with validation data (raw, not yet feature-engineered).
+    """
+    # --- Strategy 1: use local data files that were already fetched ---
+    local_paths = [
+        Path(local_file) if local_file else None,
+        Path("data/processed/engineered_features.csv"),
+        Path("data/raw/historical_data.csv"),
+    ]
+
+    for path in local_paths:
+        if path and path.exists():
+            logger.info(f"Loading validation data from local file: {path}")
+            df = pd.read_csv(path)
+            if 'time' in df.columns:
+                df['time'] = pd.to_datetime(df['time'])
+                # Filter to most recent N days
+                cutoff = df['time'].max() - timedelta(days=days)
+                df = df[df['time'] >= cutoff].copy()
+                if not df.empty:
+                    logger.info(f"Using {len(df)} records from {path} (last {days} days)")
+                    return df
+                else:
+                    logger.warning(f"No records in last {days} days in {path}")
+            else:
+                logger.warning(f"No 'time' column in {path}")
+
+    # --- Strategy 2: fetch from API (fallback) ---
+    logger.info(f"No suitable local data found. Fetching {days} days from API...")
+    fetcher = OpenMeteoFetcher()
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+
+    df = fetcher.fetch_air_quality_history(
+        start_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d")
+    )
+    return df
+
+
 def main():
     """Validate trained models with recent data"""
     parser = argparse.ArgumentParser(description='Validate trained AQI prediction models')
@@ -31,6 +79,12 @@ def main():
         type=int,
         default=7,
         help='Number of days of recent data to validate on'
+    )
+    parser.add_argument(
+        '--input',
+        type=str,
+        default=None,
+        help='Optional local CSV file to use for validation data'
     )
     
     args = parser.parse_args()
@@ -53,27 +107,26 @@ def main():
     
     logger.info(f"Loaded {len(results['models'])} models")
     
-    # Fetch recent data
-    logger.info(f"Fetching {args.days} days of recent data for validation")
-    fetcher = OpenMeteoFetcher()
+    # Fetch validation data (local first, then API)
+    logger.info(f"Loading {args.days} days of recent data for validation")
+    df = load_validation_data(args.days, args.input)
     
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=args.days)
-    
-    df = fetcher.fetch_air_quality_history(
-        start_date.strftime("%Y-%m-%d"),
-        end_date.strftime("%Y-%m-%d")
-    )
-    
-    if df.empty:
-        logger.error("No validation data fetched")
+    if df is None or df.empty:
+        logger.error("No validation data available")
         sys.exit(1)
     
     logger.info(f"Validation data: {len(df)} records")
     
-    # Engineer features
+    # Engineer features (only if raw data doesn't already have engineered columns)
     engineer = FeatureEngineer()
-    df_engineered = engineer.engineer_features(df)
+    
+    # Check if data already has engineered features (e.g. lag columns)
+    lag_cols = [c for c in df.columns if '_lag_' in c or '_rolling_' in c]
+    if lag_cols:
+        logger.info("Data already contains engineered features, skipping re-engineering")
+        df_engineered = df
+    else:
+        df_engineered = engineer.engineer_features(df)
     
     # Prepare data
     X, y, feature_names = engineer.prepare_training_data(df_engineered, target_col='aqi')
@@ -89,9 +142,14 @@ def main():
     
     logger.info(f"Valid samples for validation: {len(y)}")
     
+    if len(y) == 0:
+        logger.error("No valid samples after filtering NaN targets")
+        sys.exit(1)
+    
     # Validate each model
     logger.info("\n=== Model Validation Results ===")
     
+    all_pass = True
     for model_name in results['models'].keys():
         logger.info(f"\nValidating {model_name}...")
         
@@ -112,11 +170,16 @@ def main():
                 logger.info(f"  ✓ {model_name} meets success criteria (MAE < 15, R² > 0.6)")
             else:
                 logger.warning(f"  ✗ {model_name} does not meet success criteria")
+                all_pass = False
             
         except Exception as e:
             logger.error(f"  Error validating {model_name}: {e}")
+            all_pass = False
     
     logger.info("\n=== Validation Complete ===")
+    
+    if not all_pass:
+        logger.warning("Some models did not meet success criteria, but validation completed")
 
 
 if __name__ == "__main__":
