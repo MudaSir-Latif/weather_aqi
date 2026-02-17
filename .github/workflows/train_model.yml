@@ -2,7 +2,7 @@ name: Train Models
 
 on:
   schedule:
-    # Run daily at 2 AM UTC
+    # Run every 5 minutes (testing)
     - cron: '*/5 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
@@ -32,7 +32,7 @@ jobs:
           echo "LONGITUDE=${{ secrets.LONGITUDE || '67.0011' }}" >> .env
           echo "CITY_NAME=${{ secrets.CITY_NAME || 'Karachi' }}" >> .env
           echo "HOPSWORKS_API_KEY=${{ secrets.HOPSWORKS_API_KEY }}" >> .env
-          echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'aqi_prediction' }}" >> .env
+          echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'AQIprediction10Pearl' }}" >> .env
           echo "OPENMETEO_TIMEOUT=120" >> .env
       
       - name: Backfill historical data
