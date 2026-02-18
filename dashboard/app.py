@@ -48,9 +48,14 @@ def load_models():
     """Load trained models"""
     trainer = ModelTrainer()
     config = ModelConfig()
-    
-    if config.model_path.exists():
-        trainer.load_models(config.model_path)
+    # Resolve model path relative to project root (dashboard may be run from its folder)
+    model_dir = config.model_path
+    if not model_dir.is_absolute():
+        project_root = Path(__file__).parent.parent
+        model_dir = project_root / model_dir
+
+    if model_dir.exists():
+        trainer.load_models(model_dir)
     
     return trainer
 
