@@ -68,9 +68,6 @@ test_*.py
 # OS
 Thumbs.db
 
-# Data outputs and generated artifacts
-data/processed/
-data/analysis/
 
 # SHAP/LIME outputs
 data/processed/shap_*
