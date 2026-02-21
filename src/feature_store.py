@@ -185,16 +185,28 @@ class FeatureStore:
                 version=self.config.feature_group_version
             )
             
-            # Build query
-            query = feature_group.select_all()
+            if feature_group is None:
+                logger.warning("Feature group not found")
+                return pd.DataFrame()
+            
+            # Read data directly from feature group
+            # (avoids Arrow Flight query.select_all().read() encode bug)
+            try:
+                df = feature_group.read(read_options={"use_hive": True})
+            except Exception as read_err:
+                logger.warning(f"Hive read failed ({read_err}), trying default read")
+                try:
+                    df = feature_group.read()
+                except Exception as read_err2:
+                    logger.warning(f"Default read also failed ({read_err2}), trying select_all")
+                    query = feature_group.select_all()
+                    df = query.read(read_options={"use_hive": True})
             
             if start_time and end_time:
-                query = query.filter(
-                    (feature_group.time >= start_time) & 
-                    (feature_group.time <= end_time)
-                )
-            
-            df = query.read()
+                if 'time' in df.columns:
+                    df['time'] = pd.to_datetime(df['time'])
+                    mask = (df['time'] >= start_time) & (df['time'] <= end_time)
+                    df = df[mask]
             
             logger.info(f"Read {len(df)} records from feature group")
             return df
@@ -231,3 +243,54 @@ class FeatureStore:
             DataFrame with features
         """
         return self.read_feature_group(start_time, end_time)
+
+    def upload_model_to_registry(
+        self,
+        model_dir: str,
+        model_name: str = "aqi_prediction_model",
+        model_version: int = None,
+        metrics: dict = None,
+        description: str = "AQI prediction model for Karachi"
+    ) -> bool:
+        """
+        Upload trained model to Hopsworks Model Registry
+        
+        Args:
+            model_dir: Local directory containing model files
+            model_name: Name for the model in the registry
+            model_version: Version number (auto-incremented if None)
+            metrics: Dictionary of model metrics
+            description: Model description
+        
+        Returns:
+            True if successful
+        """
+        if not self.project:
+            logger.warning("Not connected to Hopsworks")
+            return False
+        
+        try:
+            mr = self.project.get_model_registry()
+            
+            logger.info(f"Uploading model '{model_name}' to Hopsworks Model Registry")
+            
+            # Create model entry
+            model_kwargs = {
+                "name": model_name,
+                "description": description,
+                "input_example": None,
+            }
+            if metrics:
+                model_kwargs["metrics"] = metrics
+            if model_version:
+                model_kwargs["version"] = model_version
+            
+            model = mr.python.create_model(**model_kwargs)
+            model.save(model_dir)
+            
+            logger.info(f"Model '{model_name}' uploaded to Hopsworks Model Registry")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to upload model to registry: {e}")
+            return False

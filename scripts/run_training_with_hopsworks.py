@@ -103,12 +103,41 @@ def main():
     logger.info(f"  MAE: {best_model[1]['mae']:.2f}")
     logger.info(f"  R²: {best_model[1]['r2']:.4f}")
     
-    # Save models
+    # Save models locally
     output_dir = Path(args.output_dir)
     trainer.save_models(results, output_dir)
     
     logger.info(f"\n=== Training Complete ===")
     logger.info(f"Models saved to: {output_dir}")
+    
+    # Upload models to Hopsworks Model Registry
+    if args.use_hopsworks:
+        try:
+            logger.info("Uploading models to Hopsworks Model Registry...")
+            feature_store = FeatureStore()
+            
+            # Prepare best model metrics for registry
+            best_model_name = min(results['metrics'].items(), key=lambda x: x[1]['mae'])[0]
+            best_metrics = results['metrics'][best_model_name]
+            registry_metrics = {
+                "mae": float(best_metrics['mae']),
+                "rmse": float(best_metrics['rmse']),
+                "r2": float(best_metrics['r2']),
+                "best_model": best_model_name
+            }
+            
+            success = feature_store.upload_model_to_registry(
+                model_dir=str(output_dir),
+                model_name="aqi_prediction_model",
+                metrics=registry_metrics,
+                description=f"AQI prediction models (best: {best_model_name}, MAE: {best_metrics['mae']:.2f})"
+            )
+            if success:
+                logger.info("Models uploaded to Hopsworks Model Registry")
+            else:
+                logger.warning("Failed to upload models to Hopsworks (local models still available)")
+        except Exception as e:
+            logger.warning(f"Hopsworks model registry upload failed: {e}")
     
     # Show feature importance for Random Forest
     if 'random_forest' in results['models']:
