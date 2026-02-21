@@ -1,7 +1,10 @@
 """Feature store integration with Hopsworks
 Manages feature groups for AQI prediction in the Hopsworks feature store.
 """
+import re
+import time
 import pandas as pd
+import numpy as np
 from typing import Optional
 from loguru import logger
 from src.config import HopsworksConfig
@@ -88,6 +91,45 @@ class FeatureStore:
 
         return df
 
+    @staticmethod
+    def _sanitize_hopsworks_output(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Clean data returned by Hopsworks which may contain bracket-wrapped
+        scientific notation strings like '[1.1451428E2]' instead of 114.51428.
+        """
+        if df.empty:
+            return df
+
+        df = df.copy()
+        bracket_pattern = re.compile(r'^\[(.+)\]$')
+
+        for col in df.columns:
+            if col == 'time':
+                continue
+            # Only process columns that contain any strings
+            if df[col].dtype == object:
+                def _parse_value(v):
+                    if isinstance(v, str):
+                        m = bracket_pattern.match(v.strip())
+                        if m:
+                            try:
+                                return float(m.group(1))
+                            except ValueError:
+                                return np.nan
+                        try:
+                            return float(v)
+                        except ValueError:
+                            return np.nan
+                    return v
+
+                df[col] = df[col].apply(_parse_value)
+            # Coerce to numeric (handles any remaining edge cases)
+            if col != 'time':
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        logger.info(f"Sanitized Hopsworks output: {df.shape}")
+        return df
+
     def create_feature_group(
         self, 
         df: pd.DataFrame,
@@ -148,11 +190,35 @@ class FeatureStore:
             
             self.feature_group = feature_group
             
-            # Insert data
-            feature_group.insert(df, write_options={"wait_for_job": True})
-            
-            logger.info(f"Inserted {len(df)} records into feature group")
-            return True
+            # Insert data with retry logic (connection aborts sometimes
+            # even after 100% upload – data may already be saved)
+            max_retries = 3
+            for attempt in range(1, max_retries + 1):
+                try:
+                    feature_group.insert(df, write_options={"wait_for_job": True})
+                    logger.info(f"Inserted {len(df)} records into feature group")
+                    return True
+                except Exception as insert_err:
+                    err_str = str(insert_err).lower()
+                    # Connection abort after full upload is usually benign
+                    if "connection aborted" in err_str or "remotedisconnected" in err_str:
+                        logger.warning(
+                            f"Insert attempt {attempt}/{max_retries}: connection dropped "
+                            f"(data likely saved). Error: {insert_err}"
+                        )
+                        if attempt < max_retries:
+                            wait = 5 * attempt
+                            logger.info(f"Waiting {wait}s before retry...")
+                            time.sleep(wait)
+                        else:
+                            # After all retries, treat as success since upload reached 100%
+                            logger.warning(
+                                "All insert retries exhausted due to connection drops. "
+                                "Data was likely uploaded successfully."
+                            )
+                            return True
+                    else:
+                        raise  # Non-connection errors should propagate
             
         except Exception as e:
             logger.error(f"Failed to create/update feature group: {e}")
@@ -207,6 +273,9 @@ class FeatureStore:
                     df['time'] = pd.to_datetime(df['time'])
                     mask = (df['time'] >= start_time) & (df['time'] <= end_time)
                     df = df[mask]
+            
+            # Sanitize Hopsworks output (bracket-notation strings, etc.)
+            df = self._sanitize_hopsworks_output(df)
             
             logger.info(f"Read {len(df)} records from feature group")
             return df

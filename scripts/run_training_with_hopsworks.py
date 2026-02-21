@@ -59,6 +59,15 @@ def main():
                 logger.info(f"Loaded {len(df)} records from Hopsworks")
                 if 'time' in df.columns:
                     df['time'] = pd.to_datetime(df['time'])
+                # Validate that data is actually numeric (not bracket-notation strings)
+                non_time_cols = [c for c in df.columns if c != 'time']
+                n_str_cols = sum(1 for c in non_time_cols if df[c].dtype == object)
+                if n_str_cols > 0:
+                    logger.warning(
+                        f"Hopsworks returned {n_str_cols} string columns – "
+                        "data may be corrupted, falling back to local CSV"
+                    )
+                    df = pd.DataFrame()  # Force fallback
             else:
                 logger.warning("Hopsworks returned empty DataFrame")
         except Exception as e:
@@ -157,8 +166,14 @@ def main():
     if SHAP_AVAILABLE:
         logger.info("\n=== SHAP Feature Explanations ===")
         try:
+            # Ensure all features are numeric before SHAP analysis
+            X_numeric = X.copy()
+            for col in X_numeric.columns:
+                X_numeric[col] = pd.to_numeric(X_numeric[col], errors='coerce')
+            X_numeric = X_numeric.fillna(0)
+            
             # Use a sample of test data for SHAP (faster computation)
-            X_sample = X.sample(n=min(500, len(X)), random_state=42)
+            X_sample = X_numeric.sample(n=min(500, len(X_numeric)), random_state=42)
             
             # SHAP for XGBoost (best model)
             if 'xgboost' in results['models']:
