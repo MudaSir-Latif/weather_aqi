@@ -23,8 +23,8 @@ python-dotenv>=1.0.0
 # Logging
 loguru>=0.7.0
 
-# Feature Store (Optional)
-hopsworks>=3.4.0
+# Feature Store
+hopsworks[python]>=3.4.0
 
 # Visualization
 plotly>=5.17.0

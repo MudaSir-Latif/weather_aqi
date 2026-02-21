@@ -142,6 +142,10 @@ class FeatureStore:
                 )
                 logger.info("Created new feature group")
             
+            if feature_group is None:
+                logger.error("Feature group creation returned None - cannot insert data")
+                return False
+            
             self.feature_group = feature_group
             
             # Insert data
