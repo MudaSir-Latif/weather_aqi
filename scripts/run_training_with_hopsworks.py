@@ -4,6 +4,7 @@ import sys
 import argparse
 from pathlib import Path
 import pandas as pd
+import numpy as np
 from loguru import logger
 
 # Add parent directory to path
@@ -12,6 +13,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.feature_engineering import FeatureEngineer
 from src.model_trainer import ModelTrainer
 from src.feature_store import FeatureStore
+
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    logger.warning("SHAP not installed. Feature explanations disabled.")
 
 
 def main():
@@ -123,7 +131,6 @@ def main():
                 "mae": float(best_metrics['mae']),
                 "rmse": float(best_metrics['rmse']),
                 "r2": float(best_metrics['r2']),
-                "best_model": best_model_name
             }
             
             success = feature_store.upload_model_to_registry(
@@ -145,6 +152,84 @@ def main():
         importance_df = trainer.get_feature_importance('random_forest')
         for idx, row in importance_df.head(10).iterrows():
             logger.info(f"  {row['feature']}: {row['importance']:.4f}")
+
+    # SHAP Analysis for model explainability
+    if SHAP_AVAILABLE:
+        logger.info("\n=== SHAP Feature Explanations ===")
+        try:
+            # Use a sample of test data for SHAP (faster computation)
+            X_sample = X.sample(n=min(500, len(X)), random_state=42)
+            
+            # SHAP for XGBoost (best model)
+            if 'xgboost' in results['models']:
+                logger.info("Computing SHAP values for XGBoost model...")
+                xgb_model = results['models']['xgboost']
+                explainer = shap.TreeExplainer(xgb_model)
+                shap_values = explainer.shap_values(X_sample)
+                
+                # Get mean absolute SHAP values per feature
+                shap_importance = pd.DataFrame({
+                    'feature': feature_names,
+                    'mean_shap': np.abs(shap_values).mean(axis=0)
+                }).sort_values('mean_shap', ascending=False)
+                
+                logger.info("\nTop 15 SHAP Feature Importances (XGBoost):")
+                for idx, row in shap_importance.head(15).iterrows():
+                    logger.info(f"  {row['feature']}: {row['mean_shap']:.4f}")
+                
+                # Save SHAP summary plot
+                output_dir_path = Path(args.output_dir)
+                shap_dir = output_dir_path / "shap"
+                shap_dir.mkdir(parents=True, exist_ok=True)
+                
+                import matplotlib
+                matplotlib.use('Agg')
+                import matplotlib.pyplot as plt
+                
+                # Summary bar plot
+                plt.figure(figsize=(12, 8))
+                shap.summary_plot(shap_values, X_sample, feature_names=feature_names, 
+                                  plot_type="bar", show=False, max_display=20)
+                plt.tight_layout()
+                plt.savefig(shap_dir / "shap_summary_bar.png", dpi=150, bbox_inches='tight')
+                plt.close()
+                logger.info(f"Saved SHAP bar plot to {shap_dir / 'shap_summary_bar.png'}")
+                
+                # Summary dot plot
+                plt.figure(figsize=(12, 8))
+                shap.summary_plot(shap_values, X_sample, feature_names=feature_names,
+                                  show=False, max_display=20)
+                plt.tight_layout()
+                plt.savefig(shap_dir / "shap_summary_dot.png", dpi=150, bbox_inches='tight')
+                plt.close()
+                logger.info(f"Saved SHAP dot plot to {shap_dir / 'shap_summary_dot.png'}")
+                
+                # Save SHAP values for later use (e.g., dashboard)
+                shap_importance.to_csv(shap_dir / "shap_feature_importance.csv", index=False)
+                logger.info(f"Saved SHAP importance to {shap_dir / 'shap_feature_importance.csv'}")
+            
+            # SHAP for Random Forest 
+            if 'random_forest' in results['models']:
+                logger.info("\nComputing SHAP values for Random Forest model...")
+                rf_model = results['models']['random_forest']
+                rf_explainer = shap.TreeExplainer(rf_model)
+                rf_shap_values = rf_explainer.shap_values(X_sample)
+                
+                rf_shap_importance = pd.DataFrame({
+                    'feature': feature_names,
+                    'mean_shap': np.abs(rf_shap_values).mean(axis=0)
+                }).sort_values('mean_shap', ascending=False)
+                
+                logger.info("\nTop 15 SHAP Feature Importances (Random Forest):")
+                for idx, row in rf_shap_importance.head(15).iterrows():
+                    logger.info(f"  {row['feature']}: {row['mean_shap']:.4f}")
+                
+                rf_shap_importance.to_csv(shap_dir / "shap_rf_feature_importance.csv", index=False)
+                
+        except Exception as e:
+            logger.warning(f"SHAP analysis failed: {e}")
+    else:
+        logger.info("SHAP not available. Install with: pip install shap")
 
 
 if __name__ == "__main__":

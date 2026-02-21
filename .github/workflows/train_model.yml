@@ -2,9 +2,15 @@ name: Train Models
 
 on:
   schedule:
-    # Run every 5 minutes (testing)
-    - cron: '*/5 * * * *'
-  workflow_dispatch:  # Allow manual trigger
+    # Run daily at 2 AM UTC (after feature pipeline has accumulated data)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: 'Days of historical data to backfill (0 = skip backfill)'
+        required: false
+        default: '0'
+        type: string
 
 jobs:
   train-models:
@@ -35,15 +41,13 @@ jobs:
           echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'AQIprediction10Pearl' }}" >> .env
           echo "OPENMETEO_TIMEOUT=120" >> .env
       
-      - name: Backfill historical data
+      - name: Backfill historical data (only on manual trigger with backfill_days > 0)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.backfill_days != '0' }}
         run: |
-          python scripts/backfill_data.py --days 730
-      
-      - name: Run feature pipeline (local + Hopsworks)
-        run: |
+          python scripts/backfill_data.py --days ${{ github.event.inputs.backfill_days }}
           python scripts/run_feature_pipeline.py --input data/raw/historical_data.csv --use-hopsworks
       
-      - name: Train models (Hopsworks with local fallback)
+      - name: Train models (from Hopsworks with local CSV fallback)
         run: |
           python scripts/run_training_with_hopsworks.py --use-hopsworks
       

@@ -24,12 +24,15 @@ python-dotenv>=1.0.0
 loguru>=0.7.0
 
 # Feature Store
-hopsworks[python]>=3.4.0
+hopsworks[python]==4.2.*
 
 # Visualization
 plotly>=5.17.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
+
+# Explainability
+shap>=0.42.0
 
 # Utilities
 pytz>=2023.3

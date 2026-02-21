@@ -2,8 +2,8 @@ name: Feature Pipeline
 
 on:
   schedule:
-    # Run every minute (testing)
-    - cron: '*/1 * * * *'
+    # Run every hour to fetch latest air quality data
+    - cron: '0 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -35,9 +35,9 @@ jobs:
           echo "HOPSWORKS_PROJECT_NAME=${{ secrets.HOPSWORKS_PROJECT_NAME || 'AQIprediction10Pearl' }}" >> .env
           echo "OPENMETEO_TIMEOUT=120" >> .env
       
-      - name: Run feature pipeline (local + Hopsworks)
+      - name: Run feature pipeline (fetch last 2 days, push to Hopsworks)
         run: |
-          python scripts/run_feature_pipeline.py --days 30 --use-hopsworks
+          python scripts/run_feature_pipeline.py --days 2 --use-hopsworks
       
       - name: Upload feature data
         uses: actions/upload-artifact@v4
