@@ -9,6 +9,13 @@ Air Quality Index (AQI) Prediction System using Machine Learning and **Open-Mete
 
 This system fetches real-time air quality data, performs feature engineering, trains ML models (Ridge Regression, Random Forest, XGBoost), and provides predictions through a REST API and interactive dashboard.
 
+## 📌 Project Description
+
+**Weather & AQI Prediction System**
+Built a real-time Air Quality Index (AQI) prediction and monitoring system using Python, FastAPI, and Streamlit, integrating the Open-Meteo API (no API key required) to fetch live and historical air quality data including PM2.5, PM10, CO, NO2, SO2, and O3.
+Trained and deployed Ridge Regression, Random Forest, and XGBoost models to forecast AQI up to 7 days in advance, with automated CI/CD pipelines via GitHub Actions for daily data collection and weekly model retraining.
+Implemented a Hopsworks feature store for scalable ML workflows, SHAP/LIME model explainability, and a health-alert system with category-based recommendations.
+
 ## 🌟 Features
 
 - **No API Key Required**: Uses Open-Meteo API for free air quality data
